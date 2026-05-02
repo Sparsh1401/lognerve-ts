@@ -1,0 +1,41 @@
+{
+  "name": "lognerve.ai-typescript-sdk",
+  "version": "1.0.0",
+  "description": "SDK to trace LLM applications",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "tsc --noEmit",
+    "format": "prettier --write .",
+    "dev": "npm run build && node dist/index.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "prettier": "^3.8.3",
+    "typescript": "^6.0.3"
+  },
+  "dependencies": {
+    "@arizeai/openinference-core": "^2.0.8",
+    "@arizeai/openinference-instrumentation-anthropic": "^0.1.10",
+    "@arizeai/openinference-instrumentation-openai": "^4.1.0",
+    "@arizeai/openinference-semantic-conventions": "^2.3.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.216.0",
+    "@opentelemetry/exporter-trace-otlp-proto": "^0.216.0",
+    "@opentelemetry/instrumentation": "^0.216.0",
+    "@opentelemetry/resources": "^2.7.1",
+    "@opentelemetry/sdk-trace-node": "^2.7.1",
+    "openai": "^6.7.0"
+  }
+}
