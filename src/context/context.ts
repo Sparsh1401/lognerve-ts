@@ -55,10 +55,15 @@ export namespace Context {
     const name = options.name ?? fn.name ?? "anonymous";
 
     return getTracer().startActiveSpan(name, async (span) => {
-      span.setAttribute(SPAN_KIND_ATTR, KIND_MAP[options.type ?? "chain"] ?? "CHAIN");
+      span.setAttribute(
+        SPAN_KIND_ATTR,
+        KIND_MAP[options.type ?? "chain"] ?? "CHAIN",
+      );
 
-      if (options.sessionId !== undefined) span.setAttribute(SESSION_ID, options.sessionId);
-      if (options.userId !== undefined)    span.setAttribute(USER_ID, options.userId);
+      if (options.sessionId !== undefined)
+        span.setAttribute(SESSION_ID, options.sessionId);
+      if (options.userId !== undefined)
+        span.setAttribute(USER_ID, options.userId);
 
       if (options.captureInput !== false && args.length > 0) {
         try {
@@ -68,23 +73,31 @@ export namespace Context {
       }
 
       if (options.metadata !== undefined) {
-        try { span.setAttribute(TRACE_METADATA, JSON.stringify(options.metadata)); } catch {}
+        try {
+          span.setAttribute(TRACE_METADATA, JSON.stringify(options.metadata));
+        } catch {}
       }
 
       if (options.tags !== undefined) {
-        try { span.setAttribute(TRACE_TAGS, JSON.stringify(options.tags)); } catch {}
+        try {
+          span.setAttribute(TRACE_TAGS, JSON.stringify(options.tags));
+        } catch {}
       }
 
       try {
         const result = await fn(...args);
 
         if (options.captureOutput !== false) {
-          try { span.setAttribute(OUTPUT_VALUE, JSON.stringify(result)); } catch {}
+          try {
+            span.setAttribute(OUTPUT_VALUE, JSON.stringify(result));
+          } catch {}
         }
 
         return result;
       } catch (err) {
-        span.recordException(err instanceof Error ? err : new Error(String(err)));
+        span.recordException(
+          err instanceof Error ? err : new Error(String(err)),
+        );
         span.setStatus({ code: SpanStatusCode.ERROR });
         throw err;
       } finally {
@@ -98,16 +111,24 @@ export namespace Context {
    * including auto-instrumented OpenAI/Anthropic calls.
    */
   export async function usingAttributes<T>(
-    attrs: { sessionId?: string; userId?: string; tags?: string[]; metadata?: Record<string, unknown> },
+    attrs: {
+      sessionId?: string;
+      userId?: string;
+      tags?: string[];
+      metadata?: Record<string, unknown>;
+    },
     fn: () => Promise<T>,
   ): Promise<T> {
-    const { setSession, setUser, setTags, setMetadata } = await import("@arizeai/openinference-core");
+    const { setSession, setUser, setTags, setMetadata } =
+      await import("@arizeai/openinference-core");
     let ctx = context.active();
 
-    if (attrs.sessionId !== undefined) ctx = setSession(ctx, { sessionId: attrs.sessionId });
-    if (attrs.userId !== undefined)    ctx = setUser(ctx, { userId: attrs.userId });
-    if (attrs.tags !== undefined)      ctx = setTags(ctx, attrs.tags);
-    if (attrs.metadata !== undefined)  ctx = setMetadata(ctx, attrs.metadata);
+    if (attrs.sessionId !== undefined)
+      ctx = setSession(ctx, { sessionId: attrs.sessionId });
+    if (attrs.userId !== undefined)
+      ctx = setUser(ctx, { userId: attrs.userId });
+    if (attrs.tags !== undefined) ctx = setTags(ctx, attrs.tags);
+    if (attrs.metadata !== undefined) ctx = setMetadata(ctx, attrs.metadata);
 
     return context.with(ctx, fn);
   }
@@ -126,19 +147,30 @@ export namespace Context {
     if (attributes.name !== undefined) span.updateName(attributes.name);
 
     if (attributes.input !== undefined) {
-      try { span.setAttribute(INPUT_VALUE, JSON.stringify(attributes.input)); } catch {}
+      try {
+        span.setAttribute(INPUT_VALUE, JSON.stringify(attributes.input));
+      } catch {}
     }
     if (attributes.output !== undefined) {
-      try { span.setAttribute(OUTPUT_VALUE, JSON.stringify(attributes.output)); } catch {}
+      try {
+        span.setAttribute(OUTPUT_VALUE, JSON.stringify(attributes.output));
+      } catch {}
     }
     if (attributes.model !== undefined) {
       span.setAttribute(LLM_MODEL, attributes.model);
     }
     if (attributes.modelParams !== undefined) {
-      try { span.setAttribute(LLM_MODEL_PARAMETERS, JSON.stringify(attributes.modelParams)); } catch {}
+      try {
+        span.setAttribute(
+          LLM_MODEL_PARAMETERS,
+          JSON.stringify(attributes.modelParams),
+        );
+      } catch {}
     }
     if (attributes.usage !== undefined) {
-      try { span.setAttribute(LLM_TOKEN_COUNT, JSON.stringify(attributes.usage)); } catch {}
+      try {
+        span.setAttribute(LLM_TOKEN_COUNT, JSON.stringify(attributes.usage));
+      } catch {}
     }
   }
 
@@ -151,14 +183,20 @@ export namespace Context {
     const span = trace.getActiveSpan();
     if (!span) return;
 
-    if (attributes.sessionId !== undefined) span.setAttribute(SESSION_ID, attributes.sessionId);
-    if (attributes.userId !== undefined)    span.setAttribute(USER_ID, attributes.userId);
+    if (attributes.sessionId !== undefined)
+      span.setAttribute(SESSION_ID, attributes.sessionId);
+    if (attributes.userId !== undefined)
+      span.setAttribute(USER_ID, attributes.userId);
 
     if (attributes.tags !== undefined) {
-      try { span.setAttribute(TRACE_TAGS, JSON.stringify(attributes.tags)); } catch {}
+      try {
+        span.setAttribute(TRACE_TAGS, JSON.stringify(attributes.tags));
+      } catch {}
     }
     if (attributes.metadata !== undefined) {
-      try { span.setAttribute(TRACE_METADATA, JSON.stringify(attributes.metadata)); } catch {}
+      try {
+        span.setAttribute(TRACE_METADATA, JSON.stringify(attributes.metadata));
+      } catch {}
     }
   }
 

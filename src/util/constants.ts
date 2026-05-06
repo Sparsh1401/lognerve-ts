@@ -9,7 +9,7 @@ export const LLM_MODEL_PARAMETERS = "lognerve.model.parameters";
 export const TRACE_METADATA = "lognerve.trace.metadata";
 export const TRACE_TAGS = "lognerve.trace.tags";
 
-export const SPAN_PATH     = "lognerve.span.path";
+export const SPAN_PATH = "lognerve.span.path";
 export const SPAN_IDS_PATH = "lognerve.span.ids_path";
 
 export const SpanAttributes = {

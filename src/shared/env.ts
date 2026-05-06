@@ -38,8 +38,9 @@ function parseHeaders(
 
 function parseExporterKind(
   raw: string | undefined,
-): "console" | "otlp-http" | undefined {
-  if (raw === "console" || raw === "otlp-http") return raw;
+): "console" | "otlp-http" | "otlp-proto" | undefined {
+  if (raw === "console" || raw === "otlp-http" || raw === "otlp-proto")
+    return raw;
   return undefined;
 }
 
