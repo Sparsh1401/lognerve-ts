@@ -12,6 +12,10 @@ export const TRACE_TAGS = "lognerve.trace.tags";
 export const SPAN_PATH = "lognerve.span.path";
 export const SPAN_IDS_PATH = "lognerve.span.ids_path";
 
+export const PROJECT_ID = "lognerve.project.id";
+export const GIT_REPO = "lognerve.git.repo";
+export const GIT_REF = "lognerve.git.ref";
+
 export const SpanAttributes = {
   // LLM
   LLM_MODEL,
@@ -28,4 +32,7 @@ export const SpanAttributes = {
   TRACE_TAGS,
   SPAN_PATH,
   SPAN_IDS_PATH,
+  PROJECT_ID,
+  GIT_REPO,
+  GIT_REF,
 } as const;

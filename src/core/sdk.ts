@@ -1,6 +1,6 @@
 import { Tracer } from "../tracer/tracer";
 import { Instrumentation } from "../instrumentation/instrumentation";
-import { readInstrumentations } from "../shared/env";
+import { readInstrumentations } from "../shared/config";
 
 export interface LogNerveOptions extends Tracer.TracerConfig {
   instrumentations?: Instrumentation.Kind[];
@@ -20,6 +20,13 @@ export function initialize(config: LogNerveOptions = {}): void {
       tracerProvider: _handle.provider,
     });
   }
+
+  // Auto-flush on graceful exit so buffered spans aren't lost
+  // with BatchSpanProcessor when the app errors before explicit flush()
+  const onExit = () => {
+    _handle?.flush();
+  };
+  process.once("beforeExit", onExit);
 }
 
 export async function flush(): Promise<void> {

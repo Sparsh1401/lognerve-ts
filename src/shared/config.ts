@@ -3,10 +3,15 @@ import type { Instrumentation } from "../instrumentation/instrumentation";
 
 export function readEnv(): Partial<Tracer.TracerConfig> {
   return {
+    projectId: process.env.LOGNERVE_PROJECT_ID,
     projectName: process.env.LOGNERVE_PROJECT_NAME,
     serviceName: process.env.LOGNERVE_SERVICE_NAME,
+    gitRepo: process.env.LOGNERVE_GIT_REPO,
+    gitRef: process.env.LOGNERVE_GIT_REF,
     otlpEndpoint: process.env.LOGNERVE_OTLP_ENDPOINT,
     otlpHeaders: parseHeaders(process.env.LOGNERVE_OTLP_HEADERS),
+    otlpCompression: parseCompression(process.env.LOGNERVE_OTLP_COMPRESSION),
+    batchExport: parseBoolean(process.env.LOGNERVE_BATCH_EXPORT),
     exporter: parseExporterKind(process.env.LOGNERVE_EXPORTER),
     environment: parseEnvironment(process.env.LOGNERVE_ENVIRONMENT),
   };
@@ -49,5 +54,18 @@ function parseEnvironment(
 ): "local" | "production" | undefined {
   if (raw === "production") return "production";
   if (raw === "local" || raw === "development") return "local";
+  return undefined;
+}
+
+function parseCompression(
+  raw: string | undefined,
+): "none" | "gzip" | undefined {
+  if (raw === "none" || raw === "gzip") return raw;
+  return undefined;
+}
+
+function parseBoolean(raw: string | undefined): boolean | undefined {
+  if (raw === "true" || raw === "1" || raw === "yes") return true;
+  if (raw === "false" || raw === "0" || raw === "no") return false;
   return undefined;
 }

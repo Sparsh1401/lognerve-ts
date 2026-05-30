@@ -1,10 +1,11 @@
-import type { Span } from "@opentelemetry/api";
+import type { Span, SpanContext } from "@opentelemetry/api";
 import type {
   ReadableSpan,
   SpanProcessor,
 } from "@opentelemetry/sdk-trace-base";
 import type { Context } from "@opentelemetry/api";
 import { SpanStatusCode } from "@opentelemetry/api";
+import { GIT_REF, GIT_REPO, PROJECT_ID } from "../util/constants";
 
 const SPAN_KIND_ATTR = "openinference.span.kind";
 const SPAN_PATH_ATTR = "lognerve.span.path";
@@ -32,6 +33,9 @@ function indent(depth: number): string {
 
 export class LogNerveSpanProcessor implements SpanProcessor {
   private readonly devMode: boolean;
+  private readonly projectId?: string;
+  private readonly gitRepo?: string;
+  private readonly gitRef?: string;
 
   // call trace maps — keyed by spanId, live only while span is in-flight
   private readonly _namePath = new Map<string, string[]>();
@@ -40,16 +44,25 @@ export class LogNerveSpanProcessor implements SpanProcessor {
   // depth map for dev console indentation — keyed by "traceId:spanId"
   private readonly _depthMap = new Map<string, number>();
 
-  constructor(devMode = false) {
-    this.devMode = devMode;
+  constructor(config: {
+    devMode?: boolean;
+    projectId?: string;
+    gitRepo?: string;
+    gitRef?: string;
+  } = {}) {
+    this.devMode = config.devMode ?? false;
+    this.projectId = config.projectId;
+    this.gitRepo = config.gitRepo;
+    this.gitRef = config.gitRef;
   }
 
   onStart(span: Span, _parentContext: Context): void {
     const { spanId } = span.spanContext();
-    // parentSpanId is a stable internal field on the SDK Span implementation
-    const parentSpanId: string | undefined = (
-      span as unknown as { parentSpanId?: string }
-    ).parentSpanId;
+    // parentSpanContext is an internal field on the SDK SpanImpl class
+    const parentSpanCtx: SpanContext | undefined = (
+      span as unknown as { parentSpanContext?: SpanContext }
+    ).parentSpanContext;
+    const parentSpanId = parentSpanCtx?.spanId;
 
     const parentNamePath = parentSpanId
       ? this._namePath.get(parentSpanId)
@@ -68,6 +81,10 @@ export class LogNerveSpanProcessor implements SpanProcessor {
       parentNamePath && parentSpanId
         ? [...(parentIdsPath ?? []), parentSpanId]
         : [];
+
+    if (this.projectId !== undefined) span.setAttribute(PROJECT_ID, this.projectId);
+    if (this.gitRepo !== undefined) span.setAttribute(GIT_REPO, this.gitRepo);
+    if (this.gitRef !== undefined) span.setAttribute(GIT_REF, this.gitRef);
 
     span.setAttribute(SPAN_PATH_ATTR, spanNamePath);
     span.setAttribute(SPAN_IDS_PATH_ATTR, spanIdsPath);

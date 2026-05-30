@@ -20,9 +20,12 @@ import { LogNerve, Context } from "lognerve.ai-typescript-sdk";
 LogNerve.initialize();
 
 // wrap any async function in a span
-const result = await Context.observe({ name: "my_task", type: "agent" }, async () => {
-  return "done";
-});
+const result = await Context.observe(
+  { name: "my_task", type: "agent" },
+  async () => {
+    return "done";
+  },
+);
 
 await LogNerve.flush();
 await LogNerve.shutdown();
@@ -36,28 +39,41 @@ Pass options directly or set environment variables — env vars are the default,
 
 ```typescript
 LogNerve.initialize({
+  projectId: "proj_123",
   projectName: "my-project",
   serviceName: "my-service",
-  environment: "production",       // "local" | "production"
-  exporter: "otlp-http",           // "console" | "otlp-http"
+  gitRepo: "git@github.com:org/repo.git",
+  gitRef: "8b7f2c1",
+  environment: "production", // "local" | "production"
+  exporter: "otlp-http", // "console" | "otlp-http" | "otlp-proto"
   otlpEndpoint: "https://...",
+  otlpCompression: "gzip", // optional: "none" | "gzip"
   otlpHeaders: { Authorization: "Bearer ..." },
-  batchExport: true,               // use BatchSpanProcessor (recommended for production)
-  instrumentations: ["openai"],    // auto-instrument libraries
+  batchExport: true, // use BatchSpanProcessor (recommended for production)
+  instrumentations: ["openai"], // auto-instrument libraries
 });
 ```
 
 ### Environment Variables
 
-| Variable | Description |
-|---|---|
-| `LOGNERVE_PROJECT_NAME` | Project name attached to all spans |
-| `LOGNERVE_SERVICE_NAME` | Service name for the resource |
-| `LOGNERVE_ENVIRONMENT` | `local` or `production` |
-| `LOGNERVE_EXPORTER` | `console` or `otlp-http` |
-| `LOGNERVE_OTLP_ENDPOINT` | OTLP collector URL |
-| `LOGNERVE_OTLP_HEADERS` | Headers as `key1=value1,key2=value2` |
+| Variable                    | Description                            |
+| --------------------------- | -------------------------------------- |
+| `LOGNERVE_PROJECT_ID`       | Backend project ID attached to spans   |
+| `LOGNERVE_PROJECT_NAME`     | Project name attached to all spans     |
+| `LOGNERVE_SERVICE_NAME`     | Service name for the resource          |
+| `LOGNERVE_GIT_REPO`         | Override detected git remote URL       |
+| `LOGNERVE_GIT_REF`          | Override detected git commit SHA       |
+| `LOGNERVE_ENVIRONMENT`      | `local` or `production`                |
+| `LOGNERVE_EXPORTER`         | `console`, `otlp-http`, `otlp-proto`   |
+| `LOGNERVE_OTLP_ENDPOINT`    | OTLP collector URL                     |
+| `LOGNERVE_OTLP_COMPRESSION` | `none` or `gzip` for OTLP exports      |
+| `LOGNERVE_BATCH_EXPORT`    | `true` or `false` for batch export     |
+| `LOGNERVE_OTLP_HEADERS`     | Headers as `key1=value1,key2=value2`   |
 | `LOGNERVE_INSTRUMENTATIONS` | Comma-separated: `openai`, `anthropic` |
+
+If `gitRepo` and `gitRef` are not passed, LogNerve attempts to detect them from the current git checkout automatically.
+
+When `otlpCompression` is set to `gzip`, the SDK sends compressed OTLP requests with `Content-Encoding: gzip`.
 
 ---
 
@@ -90,7 +106,7 @@ const answer = await Context.observe(
   async (question: string) => {
     return askLLM(question);
   },
-  "What is the weather in Tokyo?"
+  "What is the weather in Tokyo?",
 );
 ```
 
@@ -105,16 +121,16 @@ await Context.observe({ name: "pipeline", type: "agent" }, async () => {
 
 ### Options
 
-| Option | Type | Description |
-|---|---|---|
-| `name` | `string` | Span name |
-| `type` | `"agent" \| "tool" \| "llm" \| "chain"` | Span kind |
-| `captureInput` | `boolean` | Capture function args (default `true`) |
-| `captureOutput` | `boolean` | Capture return value (default `true`) |
-| `sessionId` | `string` | Session ID on this span |
-| `userId` | `string` | User ID on this span |
-| `metadata` | `object` | Arbitrary metadata |
-| `tags` | `string[]` | Tags |
+| Option          | Type                                    | Description                            |
+| --------------- | --------------------------------------- | -------------------------------------- |
+| `name`          | `string`                                | Span name                              |
+| `type`          | `"agent" \| "tool" \| "llm" \| "chain"` | Span kind                              |
+| `captureInput`  | `boolean`                               | Capture function args (default `true`) |
+| `captureOutput` | `boolean`                               | Capture return value (default `true`)  |
+| `sessionId`     | `string`                                | Session ID on this span                |
+| `userId`        | `string`                                | User ID on this span                   |
+| `metadata`      | `object`                                | Arbitrary metadata                     |
+| `tags`          | `string[]`                              | Tags                                   |
 
 ---
 
@@ -128,7 +144,7 @@ await Context.usingAttributes(
   async () => {
     // every span created here carries sessionId and userId
     await runAgent();
-  }
+  },
 );
 ```
 
@@ -179,5 +195,5 @@ Get the current trace and span ID from anywhere inside an `observe()` block:
 
 ```typescript
 const traceId = Context.getActiveTraceId();
-const spanId  = Context.getActiveSpanId();
+const spanId = Context.getActiveSpanId();
 ```
