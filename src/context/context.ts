@@ -13,6 +13,7 @@ import {
   SPAN_SOURCE_FILE,
   SPAN_SOURCE_FUNCTION,
   SPAN_SOURCE_LINE,
+  TRACER_NAME,
   TRACE_METADATA,
   TRACE_TAGS,
 } from "../util/constants";
@@ -34,7 +35,7 @@ const AsyncGeneratorFunction = Object.getPrototypeOf(async function* () {})
   .constructor as FunctionConstructor;
 
 function getTracer() {
-  _tracer ??= trace.getTracer("lognerve");
+  _tracer ??= trace.getTracer(TRACER_NAME);
   return _tracer;
 }
 

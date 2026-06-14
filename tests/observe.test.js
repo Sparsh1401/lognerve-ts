@@ -13,6 +13,8 @@ function loadSdk() {
     "../dist/index.js",
     "../dist/core/lognerve.js",
     "../dist/context/context.js",
+    "../dist/privacy/pii.js",
+    "../dist/tracer/processor.js",
   ]) {
     delete require.cache[require.resolve(path)];
   }
@@ -81,6 +83,45 @@ describe("observe", () => {
       "observe",
       "usingAttributes",
     ]);
+  });
+
+  it("redacts common PII with local regex rules", () => {
+    const { PiiRedactor } = require("../dist/privacy/pii.js");
+    const redactor = new PiiRedactor({
+      patterns: [{ pattern: "customer-[0-9]+", replacement: "[CUSTOMER_ID]" }],
+    });
+
+    assert.equal(
+      redactor.redact(
+        "email jane@example.com phone 415-555-1212 card 4111 1111 1111 1111 token Bearer abcdefghijklmnop customer-42",
+      ),
+      "email [REDACTED] phone [REDACTED] card [REDACTED] token [REDACTED] [CUSTOMER_ID]",
+    );
+  });
+
+  it("redacts span attributes before export when enabled", () => {
+    const { LogNerveSpanProcessor } = require("../dist/tracer/processor.js");
+    const processor = new LogNerveSpanProcessor({ redactPii: true });
+    const span = {
+      name: "pii jane@example.com",
+      attributes: {
+        [INPUT_VALUE]: JSON.stringify("call me at 415-555-1212"),
+        [OUTPUT_VALUE]: JSON.stringify({ answer: "email jane@example.com" }),
+      },
+      events: [{ name: "Bearer abcdefghijklmnop", attributes: { token: "lnv_abcdefghijklmnop" } }],
+      spanContext: () => ({ spanId: "span", traceId: "trace" }),
+    };
+
+    processor.onEnd(span);
+
+    assert.equal(span.name, "pii [REDACTED]");
+    assert.equal(span.attributes[INPUT_VALUE], JSON.stringify("call me at [REDACTED]"));
+    assert.equal(
+      span.attributes[OUTPUT_VALUE],
+      JSON.stringify({ answer: "email [REDACTED]" }),
+    );
+    assert.equal(span.events[0].name, "[REDACTED]");
+    assert.equal(span.events[0].attributes.token, "[REDACTED]");
   });
 
   it("runs the function as a no-op when no provider is registered", async () => {

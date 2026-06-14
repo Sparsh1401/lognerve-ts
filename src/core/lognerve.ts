@@ -10,7 +10,7 @@ type InstrumentationKind =
 
 interface Config {
   apiKey?: string;
-  projectId?: string;
+  domain?: string;
   projectName?: string;
   serviceName?: string;
   gitRepo?: string;
@@ -22,6 +22,20 @@ interface Config {
   batchExport?: boolean;
   environment?: "local" | "production";
   instrumentations?: InstrumentationKind[];
+  redactPii?: boolean | PiiRedactionConfig;
+}
+
+interface PiiRedactionConfig {
+  enabled?: boolean;
+  entities?: Array<
+    "email" | "phone" | "creditCard" | "ssn" | "ipAddress" | "apiKey"
+  >;
+  replacement?: string;
+  patterns?: Array<{
+    name?: string;
+    pattern: string | RegExp;
+    replacement?: string;
+  }>;
 }
 
 interface ObserveOptions {

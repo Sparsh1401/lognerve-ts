@@ -5,7 +5,8 @@ import type {
 } from "@opentelemetry/sdk-trace-base";
 import type { Context } from "@opentelemetry/api";
 import { SpanStatusCode } from "@opentelemetry/api";
-import { GIT_REF, GIT_REPO, PROJECT_ID } from "../util/constants";
+import { GIT_REF, GIT_REPO, SDK_NAME, SDK_VERSION } from "../util/constants";
+import { createPiiRedactor, type PiiRedactionOption, type PiiRedactor } from "../privacy/pii";
 
 const SPAN_KIND_ATTR = "openinference.span.kind";
 const SPAN_PATH_ATTR = "lognerve.span.path";
@@ -33,9 +34,9 @@ function indent(depth: number): string {
 
 export class LogNerveSpanProcessor implements SpanProcessor {
   private readonly devMode: boolean;
-  private readonly projectId?: string;
   private readonly gitRepo?: string;
   private readonly gitRef?: string;
+  private readonly piiRedactor?: PiiRedactor;
 
   // call trace maps — keyed by spanId, live only while span is in-flight
   private readonly _namePath = new Map<string, string[]>();
@@ -46,84 +47,93 @@ export class LogNerveSpanProcessor implements SpanProcessor {
 
   constructor(config: {
     devMode?: boolean;
-    projectId?: string;
     gitRepo?: string;
     gitRef?: string;
+    redactPii?: PiiRedactionOption;
   } = {}) {
     this.devMode = config.devMode ?? false;
-    this.projectId = config.projectId;
     this.gitRepo = config.gitRepo;
     this.gitRef = config.gitRef;
+    this.piiRedactor = createPiiRedactor(config.redactPii);
   }
 
   onStart(span: Span, _parentContext: Context): void {
-    const { spanId } = span.spanContext();
-    // parentSpanContext is an internal field on the SDK SpanImpl class
-    const parentSpanCtx: SpanContext | undefined = (
-      span as unknown as { parentSpanContext?: SpanContext }
-    ).parentSpanContext;
-    const parentSpanId = parentSpanCtx?.spanId;
+    try {
+      const { spanId } = span.spanContext();
+      const parentSpanCtx: SpanContext | undefined = (
+        span as unknown as { parentSpanContext?: SpanContext }
+      ).parentSpanContext;
+      const parentSpanId = parentSpanCtx?.spanId;
 
-    const parentNamePath = parentSpanId
-      ? this._namePath.get(parentSpanId)
-      : undefined;
-    const parentIdsPath = parentSpanId
-      ? this._idsPath.get(parentSpanId)
-      : undefined;
+      const parentNamePath = parentSpanId
+        ? this._namePath.get(parentSpanId)
+        : undefined;
+      const parentIdsPath = parentSpanId
+        ? this._idsPath.get(parentSpanId)
+        : undefined;
 
-    const spanName = (span as unknown as { name: string }).name ?? "";
+      const spanName = (span as unknown as { name: string }).name ?? "";
 
-    const spanNamePath: string[] = parentNamePath
-      ? [...parentNamePath, spanName]
-      : [spanName];
+      const spanNamePath: string[] = parentNamePath
+        ? [...parentNamePath, spanName]
+        : [spanName];
 
-    const spanIdsPath: string[] =
-      parentNamePath && parentSpanId
-        ? [...(parentIdsPath ?? []), parentSpanId]
-        : [];
+      const spanIdsPath: string[] =
+        parentNamePath && parentSpanId
+          ? [...(parentIdsPath ?? []), parentSpanId]
+          : [];
 
-    if (this.projectId !== undefined) span.setAttribute(PROJECT_ID, this.projectId);
-    if (this.gitRepo !== undefined) span.setAttribute(GIT_REPO, this.gitRepo);
-    if (this.gitRef !== undefined) span.setAttribute(GIT_REF, this.gitRef);
+      span.setAttribute("lognerve.sdk.name", SDK_NAME);
+      span.setAttribute("lognerve.sdk.version", SDK_VERSION);
 
-    span.setAttribute(SPAN_PATH_ATTR, spanNamePath);
-    span.setAttribute(SPAN_IDS_PATH_ATTR, spanIdsPath);
+      if (this.gitRepo !== undefined) span.setAttribute(GIT_REPO, this.gitRepo);
+      if (this.gitRef !== undefined) span.setAttribute(GIT_REF, this.gitRef);
 
-    this._namePath.set(spanId, spanNamePath);
-    this._idsPath.set(spanId, spanIdsPath);
+      span.setAttribute(SPAN_PATH_ATTR, spanNamePath);
+      span.setAttribute(SPAN_IDS_PATH_ATTR, spanIdsPath);
+
+      this._namePath.set(spanId, spanNamePath);
+      this._idsPath.set(spanId, spanIdsPath);
+    } catch {
+      // never crash span creation
+    }
   }
 
   onEnd(span: ReadableSpan): void {
-    const { spanId, traceId } = span.spanContext();
+    try {
+      const { spanId, traceId } = span.spanContext();
 
-    // clean up call trace maps
-    this._namePath.delete(spanId);
-    this._idsPath.delete(spanId);
+      this._namePath.delete(spanId);
+      this._idsPath.delete(spanId);
 
-    if (!this.devMode) return;
+      this.redactSpan(span);
 
-    // derive depth from ids_path length (each entry = one ancestor)
-    const idsPath = span.attributes[SPAN_IDS_PATH_ATTR] as string[] | undefined;
-    const depth = idsPath?.length ?? 0;
+      if (!this.devMode) return;
 
-    const traceKey = `${traceId}:${spanId}`;
-    this._depthMap.set(traceKey, depth);
+      const idsPath = span.attributes[SPAN_IDS_PATH_ATTR] as string[] | undefined;
+      const depth = idsPath?.length ?? 0;
 
-    const kind =
-      (span.attributes[SPAN_KIND_ATTR] as string | undefined) ?? "SPAN";
-    const color = KIND_COLOR[kind] ?? DIM;
-    const status =
-      span.status.code === SpanStatusCode.ERROR
-        ? `${RED}✗${RESET}`
-        : `${GREEN}✓${RESET}`;
-    const dur = formatDuration(span.duration);
-    const prefix = indent(depth);
+      const traceKey = `${traceId}:${spanId}`;
+      this._depthMap.set(traceKey, depth);
 
-    process.stdout.write(
-      `${DIM}[lognerve]${RESET} ${prefix}${color}${kind.toLowerCase()}${RESET}  ${span.name}  ${DIM}${dur}${RESET}  ${status}\n`,
-    );
+      const kind =
+        (span.attributes[SPAN_KIND_ATTR] as string | undefined) ?? "SPAN";
+      const color = KIND_COLOR[kind] ?? DIM;
+      const status =
+        span.status.code === SpanStatusCode.ERROR
+          ? `${RED}✗${RESET}`
+          : `${GREEN}✓${RESET}`;
+      const dur = formatDuration(span.duration);
+      const prefix = indent(depth);
 
-    this._depthMap.delete(traceKey);
+      process.stdout.write(
+        `${DIM}[lognerve]${RESET} ${prefix}${color}${kind.toLowerCase()}${RESET}  ${span.name}  ${DIM}${dur}${RESET}  ${status}\n`,
+      );
+
+      this._depthMap.delete(traceKey);
+    } catch {
+      // never crash span completion
+    }
   }
 
   forceFlush(): Promise<void> {
@@ -135,5 +145,33 @@ export class LogNerveSpanProcessor implements SpanProcessor {
     this._idsPath.clear();
     this._depthMap.clear();
     return Promise.resolve();
+  }
+
+  private redactSpan(span: ReadableSpan): void {
+    if (!this.piiRedactor) return;
+
+    const mutableSpan = span as unknown as {
+      name?: string;
+      attributes?: Record<string, unknown>;
+      events?: Array<{ name?: string; attributes?: Record<string, unknown> }>;
+    };
+
+    if (typeof mutableSpan.name === "string") {
+      mutableSpan.name = this.piiRedactor.redact(mutableSpan.name);
+    }
+
+    if (mutableSpan.attributes) {
+      for (const [key, value] of Object.entries(mutableSpan.attributes)) {
+        mutableSpan.attributes[key] = this.piiRedactor.redact(value);
+      }
+    }
+
+    for (const event of mutableSpan.events ?? []) {
+      if (typeof event.name === "string") event.name = this.piiRedactor.redact(event.name);
+      if (!event.attributes) continue;
+      for (const [key, value] of Object.entries(event.attributes)) {
+        event.attributes[key] = this.piiRedactor.redact(value);
+      }
+    }
   }
 }

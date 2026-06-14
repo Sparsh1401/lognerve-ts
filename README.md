@@ -37,18 +37,14 @@ Pass options directly or set environment variables — env vars are the default,
 ```typescript
 lognerve.initialize({
   apiKey: "lnv_sk_example",
-  projectId: "proj_123",
+  domain: "api.lognerve.ai", // optional, defaults endpoint to https://lognerve.ai/api/v1/traces
   projectName: "my-project",
   serviceName: "my-service",
-  gitRepo: "git@github.com:org/repo.git",
-  gitRef: "8b7f2c1",
-  environment: "production", // "local" | "production"
   exporter: "otlp-http", // "console" | "otlp-http" | "otlp-proto"
-  otlpEndpoint: "https://...",
-  otlpCompression: "gzip", // optional: "none" | "gzip"
   otlpHeaders: { Authorization: "Bearer ..." },
   batchExport: true, // use BatchSpanProcessor (recommended for production)
   instrumentations: ["openai", "anthropic"], // auto-instrument libraries
+  redactPii: true, // local regex-based PII redaction before export
 });
 ```
 
@@ -57,22 +53,51 @@ lognerve.initialize({
 | Variable                    | Description                            |
 | --------------------------- | -------------------------------------- |
 | `LOGNERVE_API_KEY`          | API key sent as `Authorization` bearer |
-| `LOGNERVE_PROJECT_ID`       | Backend project ID attached to spans   |
+| `LOGNERVE_DOMAIN`           | Domain for default OTLP endpoint       |
 | `LOGNERVE_PROJECT_NAME`     | Project name attached to all spans     |
 | `LOGNERVE_SERVICE_NAME`     | Service name for the resource          |
 | `LOGNERVE_GIT_REPO`         | Override detected git remote URL       |
 | `LOGNERVE_GIT_REF`          | Override detected git commit SHA       |
-| `LOGNERVE_ENVIRONMENT`      | `local` or `production`                |
+| `LOGNERVE_ENVIRONMENT`      | `local` or `production` (default `production`) |
 | `LOGNERVE_EXPORTER`         | `console`, `otlp-http`, `otlp-proto`   |
-| `LOGNERVE_OTLP_ENDPOINT`    | OTLP collector URL                     |
-| `LOGNERVE_OTLP_COMPRESSION` | `none` or `gzip` for OTLP exports      |
+| `LOGNERVE_OTLP_ENDPOINT`    | OTLP collector URL (defaults to `https://<domain>/api/v1/traces`) |
+| `LOGNERVE_OTLP_COMPRESSION` | `none` or `gzip` (default `gzip`)      |
 | `LOGNERVE_BATCH_EXPORT`     | `true` or `false` for batch export     |
 | `LOGNERVE_OTLP_HEADERS`     | Headers as `key1=value1,key2=value2`   |
 | `LOGNERVE_INSTRUMENTATIONS` | Comma-separated instrumentation names  |
+| `LOGNERVE_REDACT_PII`       | `true` to redact common PII locally    |
 
 If `gitRepo` and `gitRef` are not passed, LogNerve attempts to detect them from the current git checkout automatically.
 
-When `otlpCompression` is set to `gzip`, the SDK sends compressed OTLP requests with `Content-Encoding: gzip`.
+When neither `otlpEndpoint` nor `domain` is set, the SDK defaults to `https://lognerve.ai/api/v1/traces`. Use `domain` to customize (e.g. `https://eu.lognerve.ai/api/v1/traces`). Explicit `otlpEndpoint` always takes precedence.
+
+OTLP export defaults to `gzip` compression. The SDK sends compressed requests with `Content-Encoding: gzip`.
+
+---
+
+## Privacy and PII Redaction
+
+LogNerve can redact common PII locally before span attributes are exported. This mirrors Raindrop's SDK-side approach: it is regex-based and prevents matched values from leaving the application process.
+
+```typescript
+lognerve.initialize({
+  redactPii: true,
+});
+```
+
+Default local redaction covers emails, phone numbers, credit cards, SSNs, IPv4 addresses, API keys, and bearer tokens. You can limit entities or add custom regex patterns:
+
+```typescript
+lognerve.initialize({
+  redactPii: {
+    entities: ["email", "apiKey"],
+    replacement: "[PRIVATE]",
+    patterns: [{ name: "customerId", pattern: "customer-[0-9]+" }],
+  },
+});
+```
+
+SOC 2, encryption at rest, server-side intelligent PII detection, and on-prem alerting are backend/product controls rather than SDK-only features. The SDK control implemented here is local regex redaction before export.
 
 ---
 

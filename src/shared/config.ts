@@ -3,7 +3,9 @@ import type { Instrumentation } from "../instrumentation/instrumentation";
 
 export function readEnv(): Partial<Tracer.TracerConfig> {
   return {
-    projectId: process.env.LOGNERVE_PROJECT_ID,
+    apiKey: process.env.LOGNERVE_API_KEY,
+    domain: process.env.LOGNERVE_DOMAIN,
+    enabled: parseBoolean(process.env.LOGNERVE_ENABLED),
     projectName: process.env.LOGNERVE_PROJECT_NAME,
     serviceName: process.env.LOGNERVE_SERVICE_NAME,
     gitRepo: process.env.LOGNERVE_GIT_REPO,
@@ -14,6 +16,7 @@ export function readEnv(): Partial<Tracer.TracerConfig> {
     batchExport: parseBoolean(process.env.LOGNERVE_BATCH_EXPORT),
     exporter: parseExporterKind(process.env.LOGNERVE_EXPORTER),
     environment: parseEnvironment(process.env.LOGNERVE_ENVIRONMENT),
+    redactPii: parseBoolean(process.env.LOGNERVE_REDACT_PII),
   };
 }
 
@@ -23,9 +26,17 @@ export function readInstrumentations(): Instrumentation.Kind[] {
   return raw
     .split(",")
     .map((s) => s.trim())
-    .filter(
-      (s): s is Instrumentation.Kind => s === "openai" || s === "anthropic",
-    );
+    .filter(isInstrumentationKind);
+}
+
+function isInstrumentationKind(value: string): value is Instrumentation.Kind {
+  return (
+    value === "openai" ||
+    value === "anthropic" ||
+    value === "langchain" ||
+    value === "bedrock" ||
+    value === "claude-agent-sdk"
+  );
 }
 
 function parseHeaders(

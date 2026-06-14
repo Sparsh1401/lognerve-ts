@@ -6,36 +6,52 @@ export interface LogNerveOptions extends Tracer.TracerConfig {
   instrumentations?: Instrumentation.Kind[];
 }
 
-let _handle: ReturnType<typeof Tracer.create> | null = null;
+let _handle: Tracer.TraceHandle | null = null;
 let _unregister: Instrumentation.RegisterResult = {};
 
 export function initialize(config: LogNerveOptions = {}): void {
-  if (_handle) return;
+  if (_handle !== null) return;
 
-  _handle = Tracer.create(config);
+  try {
+    _handle = Tracer.create(config);
+    if (!_handle) return;
 
-  const kinds = config.instrumentations ?? readInstrumentations();
-  if (kinds.length > 0) {
-    _unregister = Instrumentation.register(kinds, {
-      tracerProvider: _handle.provider,
-    });
+    const kinds = config.instrumentations ?? readInstrumentations();
+    if (kinds.length > 0) {
+      _unregister = Instrumentation.register(kinds, {
+        tracerProvider: _handle.provider,
+      });
+    }
+
+    const onExit = () => {
+      try {
+        _handle?.flush();
+      } catch {
+        // never crash the process on flush failure
+      }
+    };
+    process.once("beforeExit", onExit);
+  } catch (err) {
+    console.warn("[lognerve] initialize() failed — tracing disabled:", err);
+    _handle = null;
   }
-
-  // Auto-flush on graceful exit so buffered spans aren't lost
-  // with BatchSpanProcessor when the app errors before explicit flush()
-  const onExit = () => {
-    _handle?.flush();
-  };
-  process.once("beforeExit", onExit);
 }
 
 export async function flush(): Promise<void> {
-  await _handle?.flush();
+  try {
+    await _handle?.flush();
+  } catch {
+    // never crash the app on flush failure
+  }
 }
 
 export async function shutdown(): Promise<void> {
-  Object.values(_unregister).forEach((fn) => fn?.());
-  await _handle?.shutdown();
+  try {
+    Object.values(_unregister).forEach((fn) => fn?.());
+    await _handle?.shutdown();
+  } catch {
+    // never crash the app on shutdown failure
+  }
   _handle = null;
   _unregister = {};
 }
