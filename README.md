@@ -1,4 +1,4 @@
-# lognerve.ai TypeScript SDK
+# LogNerve TypeScript SDK
 
 Trace your LLM applications with minimal setup. Captures spans for every LLM call, tool execution, and agent step — automatically or manually — and exports them to any OpenTelemetry-compatible backend.
 
@@ -7,7 +7,7 @@ Trace your LLM applications with minimal setup. Captures spans for every LLM cal
 ## Installation
 
 ```bash
-npm install lognerve.ai-typescript-sdk
+npm install lognerve
 ```
 
 ---
@@ -15,20 +15,17 @@ npm install lognerve.ai-typescript-sdk
 ## Quick Start
 
 ```typescript
-import { LogNerve, Context } from "lognerve.ai-typescript-sdk";
+import { lognerve } from "lognerve";
 
-LogNerve.initialize();
+lognerve.initialize();
 
 // wrap any async function in a span
-const result = await Context.observe(
+const result = await lognerve.observe(
   { name: "my_task", type: "agent" },
   async () => {
     return "done";
   },
 );
-
-await LogNerve.flush();
-await LogNerve.shutdown();
 ```
 
 ---
@@ -38,7 +35,8 @@ await LogNerve.shutdown();
 Pass options directly or set environment variables — env vars are the default, direct options override them.
 
 ```typescript
-LogNerve.initialize({
+lognerve.initialize({
+  apiKey: "lnv_sk_example",
   projectId: "proj_123",
   projectName: "my-project",
   serviceName: "my-service",
@@ -50,7 +48,7 @@ LogNerve.initialize({
   otlpCompression: "gzip", // optional: "none" | "gzip"
   otlpHeaders: { Authorization: "Bearer ..." },
   batchExport: true, // use BatchSpanProcessor (recommended for production)
-  instrumentations: ["openai"], // auto-instrument libraries
+  instrumentations: ["openai", "anthropic"], // auto-instrument libraries
 });
 ```
 
@@ -58,6 +56,7 @@ LogNerve.initialize({
 
 | Variable                    | Description                            |
 | --------------------------- | -------------------------------------- |
+| `LOGNERVE_API_KEY`          | API key sent as `Authorization` bearer |
 | `LOGNERVE_PROJECT_ID`       | Backend project ID attached to spans   |
 | `LOGNERVE_PROJECT_NAME`     | Project name attached to all spans     |
 | `LOGNERVE_SERVICE_NAME`     | Service name for the resource          |
@@ -67,9 +66,9 @@ LogNerve.initialize({
 | `LOGNERVE_EXPORTER`         | `console`, `otlp-http`, `otlp-proto`   |
 | `LOGNERVE_OTLP_ENDPOINT`    | OTLP collector URL                     |
 | `LOGNERVE_OTLP_COMPRESSION` | `none` or `gzip` for OTLP exports      |
-| `LOGNERVE_BATCH_EXPORT`    | `true` or `false` for batch export     |
+| `LOGNERVE_BATCH_EXPORT`     | `true` or `false` for batch export     |
 | `LOGNERVE_OTLP_HEADERS`     | Headers as `key1=value1,key2=value2`   |
-| `LOGNERVE_INSTRUMENTATIONS` | Comma-separated: `openai`, `anthropic` |
+| `LOGNERVE_INSTRUMENTATIONS` | Comma-separated instrumentation names  |
 
 If `gitRepo` and `gitRef` are not passed, LogNerve attempts to detect them from the current git checkout automatically.
 
@@ -82,7 +81,7 @@ When `otlpCompression` is set to `gzip`, the SDK sends compressed OTLP requests 
 Pass the library name to `instrumentations` and all calls are traced automatically — no code changes needed.
 
 ```typescript
-LogNerve.initialize({ instrumentations: ["openai"] });
+lognerve.initialize({ instrumentations: ["openai"] });
 
 // IMPORTANT: require the library AFTER initialize()
 const { default: OpenAI } = require("openai");
@@ -92,16 +91,16 @@ const openai = new OpenAI();
 const response = await openai.chat.completions.create({ ... });
 ```
 
-Supported: `openai`, `anthropic`
+Supported: `openai`, `anthropic`, `langchain`, `bedrock`, `claude-agent-sdk`
 
 ---
 
-## Manual Tracing with `Context.observe()`
+## Manual Tracing with `lognerve.observe()`
 
-Wrap any async function to create a span. Arguments are captured as input, return value as output.
+Wrap any sync or async function to create a span. Arguments are captured as input, return value as output.
 
 ```typescript
-const answer = await Context.observe(
+const answer = await lognerve.observe(
   { name: "agent_turn", type: "agent" },
   async (question: string) => {
     return askLLM(question);
@@ -113,10 +112,27 @@ const answer = await Context.observe(
 Nested `observe()` calls automatically become child spans — no parent wiring needed.
 
 ```typescript
-await Context.observe({ name: "pipeline", type: "agent" }, async () => {
-  await Context.observe({ name: "fetch_data", type: "tool" }, async () => { ... });
-  await Context.observe({ name: "summarize",  type: "llm"  }, async () => { ... });
+await lognerve.observe({ name: "pipeline", type: "agent" }, async () => {
+  await lognerve.observe({ name: "fetch_data", type: "tool" }, async () => { ... });
+  await lognerve.observe({ name: "summarize",  type: "llm"  }, async () => { ... });
 });
+```
+
+Async generator functions are supported for streaming responses. The span stays open until iteration finishes, yielded chunks are passed through unchanged, and collected chunks are recorded as output.
+
+```typescript
+async function* streamAnswer(question: string) {
+  yield "Hello";
+  yield " world";
+}
+
+for await (const chunk of lognerve.observe(
+  { name: "stream_answer", type: "llm" },
+  streamAnswer,
+  "Say hi",
+)) {
+  process.stdout.write(chunk);
+}
 ```
 
 ### Options
@@ -124,7 +140,7 @@ await Context.observe({ name: "pipeline", type: "agent" }, async () => {
 | Option          | Type                                    | Description                            |
 | --------------- | --------------------------------------- | -------------------------------------- |
 | `name`          | `string`                                | Span name                              |
-| `type`          | `"agent" \| "tool" \| "llm" \| "chain"` | Span kind                              |
+| `type`          | `"agent" \| "tool" \| "llm" \| "chain" \| "span"` | Span kind                              |
 | `captureInput`  | `boolean`                               | Capture function args (default `true`) |
 | `captureOutput` | `boolean`                               | Capture return value (default `true`)  |
 | `sessionId`     | `string`                                | Session ID on this span                |
@@ -136,41 +152,16 @@ await Context.observe({ name: "pipeline", type: "agent" }, async () => {
 
 ## Session and User Context
 
-Use `usingAttributes()` to attach session and user info to all spans inside a block, including auto-instrumented LLM calls.
+Use `lognerve.usingAttributes()` to attach session and user info to all spans inside a block, including auto-instrumented LLM calls.
 
 ```typescript
-await Context.usingAttributes(
+await lognerve.usingAttributes(
   { sessionId: "session-123", userId: "user-456", tags: ["prod"] },
   async () => {
     // every span created here carries sessionId and userId
     await runAgent();
   },
 );
-```
-
----
-
-## Setting Attributes on the Active Span
-
-Call these anywhere inside an `observe()` block to annotate the current span.
-
-```typescript
-// LLM-specific attributes
-Context.setAttributes({
-  model: "gpt-4o",
-  modelParams: { temperature: 0.7 },
-  usage: { prompt_tokens: 120, completion_tokens: 80 },
-  input: "user question",
-  output: "assistant answer",
-});
-
-// Trace-level attributes
-Context.setTraceAttributes({
-  sessionId: "session-123",
-  userId: "user-456",
-  tags: ["experiment-A"],
-  metadata: { version: "2.0" },
-});
 ```
 
 ---
@@ -187,13 +178,6 @@ When `environment` is `local`, a pretty printer shows span names, kinds, duratio
 [lognerve]     tool   tool:calculate    1ms    ✓
 ```
 
----
+## Public API
 
-## Span IDs
-
-Get the current trace and span ID from anywhere inside an `observe()` block:
-
-```typescript
-const traceId = Context.getActiveTraceId();
-const spanId = Context.getActiveSpanId();
-```
+The root package intentionally exposes only `lognerve` with `initialize`, `observe`, and `usingAttributes`.

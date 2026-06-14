@@ -1,5 +1,5 @@
 {
-  "name": "lognerve.ai-typescript-sdk",
+  "name": "lognerve",
   "version": "1.0.0",
   "description": "SDK to trace LLM applications",
   "main": "dist/index.js",
@@ -16,7 +16,8 @@
   ],
   "scripts": {
     "build": "tsc",
-    "test": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run typecheck && npm run build && node --test tests/*.test.js",
     "format": "prettier --write .",
     "dev": "npm run build && node dist/index.js"
   },
@@ -28,14 +29,25 @@
   },
   "dependencies": {
     "@arizeai/openinference-core": "^2.0.8",
-    "@arizeai/openinference-instrumentation-anthropic": "^0.1.10",
-    "@arizeai/openinference-instrumentation-openai": "^4.1.0",
     "@arizeai/openinference-semantic-conventions": "^2.3.0",
     "@opentelemetry/exporter-trace-otlp-http": "^0.216.0",
     "@opentelemetry/exporter-trace-otlp-proto": "^0.216.0",
     "@opentelemetry/instrumentation": "^0.216.0",
     "@opentelemetry/resources": "^2.7.1",
-    "@opentelemetry/sdk-trace-node": "^2.7.1",
-    "openai": "^6.7.0"
+    "@opentelemetry/sdk-trace-node": "^2.7.1"
+  },
+  "peerDependencies": {
+    "@arizeai/openinference-instrumentation-anthropic": "^0.1.10",
+    "@arizeai/openinference-instrumentation-bedrock": "^0.4.14",
+    "@arizeai/openinference-instrumentation-claude-agent-sdk": "^0.2.6",
+    "@arizeai/openinference-instrumentation-langchain": "^4.0.12",
+    "@arizeai/openinference-instrumentation-openai": "^4.1.0"
+  },
+  "peerDependenciesMeta": {
+    "@arizeai/openinference-instrumentation-anthropic": { "optional": true },
+    "@arizeai/openinference-instrumentation-bedrock": { "optional": true },
+    "@arizeai/openinference-instrumentation-claude-agent-sdk": { "optional": true },
+    "@arizeai/openinference-instrumentation-langchain": { "optional": true },
+    "@arizeai/openinference-instrumentation-openai": { "optional": true }
   }
 }
