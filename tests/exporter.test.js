@@ -9,7 +9,7 @@ describe("Exporter headers", () => {
     const headers = Exporter.buildHeaders({ apiKey: "test-key" });
 
     assert.equal(headers["x-lognerve-sdk-name"], "lognerve-typescript-sdk");
-    assert.equal(headers["x-lognerve-sdk-version"], "0.1.0");
+    assert.equal(headers["x-lognerve-sdk-version"], "0.1.1");
     assert.equal(headers.Authorization, "Bearer test-key");
   });
 

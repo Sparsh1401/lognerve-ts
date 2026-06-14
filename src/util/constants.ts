@@ -2,7 +2,7 @@ export const SPAN_OUTPUT = "output.value";
 export const SPAN_INPUT = "input.value";
 
 export const SDK_NAME = "lognerve-typescript-sdk";
-export const SDK_VERSION = "0.1.0";
+export const SDK_VERSION = "0.1.1";
 export const TRACER_NAME = "lognerve";
 
 export const LLM_MODEL = "lognerve.llm.model";

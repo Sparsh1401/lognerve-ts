@@ -1,6 +1,6 @@
 {
   "name": "lognerve-ts",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "SDK to trace LLM applications",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
