@@ -7,7 +7,7 @@ Trace your LLM applications with minimal setup. Captures spans for every LLM cal
 ## Installation
 
 ```bash
-npm install lognerve
+npm install lognerve-ts
 ```
 
 ---
@@ -15,7 +15,7 @@ npm install lognerve
 ## Quick Start
 
 ```typescript
-import { lognerve } from "lognerve";
+import { lognerve } from "lognerve-ts";
 
 lognerve.initialize();
 

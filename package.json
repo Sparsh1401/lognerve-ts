@@ -1,5 +1,5 @@
 {
-  "name": "lognerve",
+  "name": "lognerve-ts",
   "version": "0.1.0",
   "description": "SDK to trace LLM applications",
   "main": "dist/index.js",
