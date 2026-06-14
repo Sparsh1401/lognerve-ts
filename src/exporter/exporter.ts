@@ -48,13 +48,30 @@ export namespace Exporter {
     apiKey?: string;
     otlpHeaders?: Record<string, string>;
   }): Record<string, string> {
+    const extra = { ...(config.otlpHeaders ?? {}) };
+
+    // Authorization is security-critical: when an apiKey is configured it must
+    // not be silently replaced by an injected otlpHeaders/LOGNERVE_OTLP_HEADERS
+    // entry (which could redirect telemetry to an attacker-controlled collector).
+    if (config.apiKey !== undefined) {
+      const overridden = Object.keys(extra).filter(
+        (key) => key.toLowerCase() === "authorization",
+      );
+      if (overridden.length > 0) {
+        diag.warn(
+          "[lognerve] ignoring Authorization header from otlpHeaders; the configured apiKey takes precedence",
+        );
+        for (const key of overridden) delete extra[key];
+      }
+    }
+
     return {
       "x-lognerve-sdk-name": SDK_NAME,
       "x-lognerve-sdk-version": SDK_VERSION,
+      ...extra,
       ...(config.apiKey !== undefined
         ? { Authorization: `Bearer ${config.apiKey}` }
         : {}),
-      ...(config.otlpHeaders ?? {}),
     };
   }
 
@@ -80,11 +97,13 @@ export namespace Exporter {
             return;
           }
 
-          diag.debug("[lognerve] span export failed", result.error);
+          // Surface at warn level: dropped spans are otherwise invisible
+          // (e.g. an invalid/rotated API key returns 401 with no user signal).
+          diag.warn("[lognerve] span export failed; dropping batch", result.error);
           resultCallback({ code: ExportResultCode.SUCCESS });
         });
       } catch (err) {
-        diag.debug("[lognerve] span export threw", err);
+        diag.warn("[lognerve] span export threw; dropping batch", err);
         resultCallback({ code: ExportResultCode.SUCCESS });
       }
     }

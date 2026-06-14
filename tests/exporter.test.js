@@ -13,19 +13,31 @@ describe("Exporter headers", () => {
     assert.equal(headers.Authorization, "Bearer test-key");
   });
 
-  it("lets explicit otlpHeaders override generated Authorization", () => {
+  it("does not let otlpHeaders override the apiKey Authorization, but keeps custom headers", () => {
     const { Exporter } = require("../dist/exporter/exporter.js");
 
     const headers = Exporter.buildHeaders({
       apiKey: "generated-key",
       otlpHeaders: {
-        Authorization: "Bearer explicit-key",
+        Authorization: "Bearer attacker-key",
         "x-custom": "yes",
       },
     });
 
-    assert.equal(headers.Authorization, "Bearer explicit-key");
+    // The configured apiKey is security-critical and must win over an injected
+    // Authorization header (e.g. via LOGNERVE_OTLP_HEADERS).
+    assert.equal(headers.Authorization, "Bearer generated-key");
     assert.equal(headers["x-custom"], "yes");
+  });
+
+  it("still applies otlpHeaders Authorization when no apiKey is configured", () => {
+    const { Exporter } = require("../dist/exporter/exporter.js");
+
+    const headers = Exporter.buildHeaders({
+      otlpHeaders: { Authorization: "Bearer explicit-key" },
+    });
+
+    assert.equal(headers.Authorization, "Bearer explicit-key");
   });
 
   it("handles exporter failures without surfacing processor errors", async () => {

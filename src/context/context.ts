@@ -360,7 +360,7 @@ function captureSourceLocation(): {
     if (!match) continue;
 
     const functionName = match[1]?.replace(/^async\s+/, "");
-    const file = match[2]?.replace(/^file:\/\//, "");
+    const file = toRelativeSourcePath(match[2]?.replace(/^file:\/\//, ""));
     const line = Number(match[3]);
 
     return {
@@ -371,6 +371,17 @@ function captureSourceLocation(): {
   }
 
   return {};
+}
+
+// Avoid shipping absolute server-side filesystem paths to the backend; emit a
+// path relative to the working directory when the source lives under it.
+function toRelativeSourcePath(file: string | undefined): string | undefined {
+  if (file === undefined) return undefined;
+  const cwd = process.cwd();
+  if (file.startsWith(cwd)) {
+    return file.slice(cwd.length).replace(/^[\\/]+/, "");
+  }
+  return file;
 }
 
 function isInternalObserveFrame(frame: string): boolean {

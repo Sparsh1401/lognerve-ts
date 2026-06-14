@@ -1,3 +1,4 @@
+import { diag } from "@opentelemetry/api";
 import { readEnv } from "../shared/config";
 import { readGitContext } from "../shared/git";
 import { Exporter } from "../exporter/exporter";
@@ -51,6 +52,7 @@ export namespace Tracer {
     if (merged.otlpEndpoint === undefined) {
       merged.otlpEndpoint = `https://${merged.domain || "lognerve.ai"}/api/v1/traces`;
     }
+    assertSafeEndpoint(merged.otlpEndpoint);
     const git = readGitContext({ gitRepo: merged.gitRepo, gitRef: merged.gitRef });
 
     const resourceAttributes: Record<string, string> = {
@@ -102,5 +104,48 @@ export namespace Tracer {
       flush: () => provider.forceFlush(),
       shutdown: () => provider.shutdown(),
     };
+  }
+
+  // Validate the resolved export endpoint before any telemetry (which can carry
+  // LLM prompts/completions and the API key) leaves the process.
+  function assertSafeEndpoint(endpoint: string): void {
+    let url: URL;
+    try {
+      url = new URL(endpoint);
+    } catch {
+      diag.warn(`[lognerve] invalid otlpEndpoint "${endpoint}"; export may fail`);
+      return;
+    }
+
+    if (url.protocol !== "https:") {
+      // http:// sends the Authorization: Bearer <apiKey> header in cleartext.
+      diag.warn(
+        `[lognerve] insecure otlpEndpoint "${endpoint}" — use https:// so the API key and trace data are not sent in plaintext`,
+      );
+    }
+
+    if (isPrivateOrMetadataHost(url.hostname)) {
+      // SSRF guard: a poisoned LOGNERVE_DOMAIN/LOGNERVE_OTLP_ENDPOINT could
+      // redirect telemetry to the cloud metadata service or an internal host.
+      diag.warn(
+        `[lognerve] otlpEndpoint host "${url.hostname}" resolves to a private/link-local address; refusing to use it as a default target`,
+      );
+    }
+  }
+
+  function isPrivateOrMetadataHost(hostname: string): boolean {
+    const host = hostname.replace(/^\[|\]$/g, "");
+    if (host === "localhost" || host === "::1") return true;
+
+    const ipv4 = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+    if (!ipv4) return false;
+    const [a, b] = ipv4.slice(1).map(Number);
+    if (a === 10) return true; // 10.0.0.0/8
+    if (a === 127) return true; // loopback
+    if (a === 172 && b >= 16 && b <= 31) return true; // 172.16.0.0/12
+    if (a === 192 && b === 168) return true; // 192.168.0.0/16
+    if (a === 169 && b === 254) return true; // link-local / cloud metadata
+    if (a === 0) return true;
+    return false;
   }
 }

@@ -37,6 +37,9 @@ const DEFAULT_ENTITIES: PiiEntity[] = [
 
 const DEFAULT_REPLACEMENT = "[REDACTED]";
 
+// Strings longer than this are skipped by redaction to bound ReDoS exposure.
+const MAX_REDACTABLE_LENGTH = 100_000;
+
 export class PiiRedactor {
   private readonly rules: Rule[];
 
@@ -75,6 +78,11 @@ export class PiiRedactor {
   }
 
   private redactString(value: string): string {
+    // Bound worst-case regex execution. Very long strings are the trigger for
+    // catastrophic backtracking (ReDoS) in user-supplied patterns, and are far
+    // more likely to be large blobs (base64, embeddings) than PII anyway.
+    if (value.length > MAX_REDACTABLE_LENGTH) return value;
+
     let redacted = value;
     for (const rule of this.rules) {
       redacted = redacted.replace(rule.pattern, (match) => {
@@ -135,7 +143,11 @@ function buildRule(entity: PiiEntity, replacement: string): Rule {
   }
   return {
     entity,
-    pattern: /\b(?:sk|pk|rk|lnv)_[A-Za-z0-9_-]{16,}\b|\bBearer\s+[A-Za-z0-9._\-+/=]{12,}\b/g,
+    // Covers: generic prefixed keys (sk_/pk_/rk_/lnv_), OpenAI project keys
+    // (sk-proj-...), Anthropic keys (sk-ant-...), AWS access key ids (AKIA...),
+    // GitHub tokens (ghp_/gho_/ghu_/ghs_/ghr_), and Bearer tokens.
+    pattern:
+      /\b(?:sk|pk|rk|lnv)_[A-Za-z0-9_-]{16,}\b|\bsk-(?:proj|ant|or)-[A-Za-z0-9_-]{16,}\b|\bAKIA[0-9A-Z]{16}\b|\bgh[pousr]_[A-Za-z0-9]{36,}\b|\bBearer\s+[A-Za-z0-9._\-+/=]{12,}\b/g,
     replacement,
   };
 }

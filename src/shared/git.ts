@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 
 export interface GitContext {
   gitRepo?: string;
@@ -7,17 +7,21 @@ export interface GitContext {
 
 export function readGitContext(overrides: GitContext = {}): GitContext {
   return {
-    gitRepo: overrides.gitRepo ?? readGit("git config --get remote.origin.url"),
-    gitRef: overrides.gitRef ?? readGit("git rev-parse HEAD"),
+    gitRepo:
+      overrides.gitRepo ?? readGit(["config", "--get", "remote.origin.url"]),
+    gitRef: overrides.gitRef ?? readGit(["rev-parse", "HEAD"]),
   };
 }
 
-function readGit(command: string): string | undefined {
+// Runs `git` with a fixed argument vector and no shell, so there is no command
+// string for any input to be interpolated into.
+function readGit(args: string[]): string | undefined {
   try {
-    const value = execSync(command, {
+    const value = execFileSync("git", args, {
       cwd: process.cwd(),
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"],
+      shell: false,
     }).trim();
 
     return value.length > 0 ? value : undefined;
