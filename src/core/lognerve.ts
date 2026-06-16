@@ -91,4 +91,6 @@ export const lognerve = {
   initialize,
   observe,
   usingAttributes,
+  flush: Sdk.flush,
+  shutdown: Sdk.shutdown,
 };

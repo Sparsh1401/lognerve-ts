@@ -79,8 +79,10 @@ describe("observe", () => {
 
     assert.deepEqual(Object.keys(sdk).sort(), ["lognerve"]);
     assert.deepEqual(Object.keys(sdk.lognerve).sort(), [
+      "flush",
       "initialize",
       "observe",
+      "shutdown",
       "usingAttributes",
     ]);
   });
